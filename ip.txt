@@ -1,0 +1,9 @@
+Device Info   : CD-ROM1/1
+Area Symbols  : JUE
+Peripherals   : E000F10
+Product No    : DKR-NAOMI
+Version       : V1.000
+Release Date  : 20261126
+Boot Filename : 1ST_READ.BIN
+SW Maker Name : dkr-naomi
+Game Title    : DIDDY KONG RACING
