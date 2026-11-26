@@ -3,7 +3,8 @@
 #
 # Diddy Kong Racing para la NAOMI 2 (mueble del Crazy Taxi), a partir del port a Dreamcast de la decompilación
 # de N64:  https://github.com/Bruceleeto/Diddy-Kong-Racing  (commit c405d21d, 2026-11-24)
-# compilado contra KallistiOS 680d1862 con el parche NAOMI_HOST de dc2naomi y empaquetado por dc2naomi
+# compilado contra KallistiOS 9926b70a (master de 2026-11-15, la que pide el port) con el parche NAOMI_HOST de
+# dc2naomi llevado a esa versión (kos/kos-9926b70a-naomi_host.patch) y empaquetado por dc2naomi
 # (perfil "dkr" de tools/games.py, disco reconstruido). Mismo método que Mario Kart 64
 # (dc2naomi/homebrew/mk64/build_mk64.sh).
 #
@@ -13,7 +14,7 @@
 #
 # Necesita: sh-elf GCC 14-15 en /opt/toolchains/dc/sh-elf (dc-chain de KallistiOS; el port usa -std=gnu23),
 # una KallistiOS con KOS_SUBARCH=naomi para el loader de dc2naomi (KOS_NAOMI_ENV), un clon de dc2naomi (D2N),
-# git, python3 >= 3.10 con venv, cmake, un compilador C/C++ del host. Pensado para Ubuntu 22.04 (WSL).
+# git, python3 >= 3.10 con venv, clang (las herramientas de AICAforge), cmake, un compilador C/C++ del host. Pensado para Ubuntu 22.04 (WSL).
 #
 # Variables (todas opcionales):
 #   WORK          dónde se clona y compila todo                 (por defecto: $HOME/dkr-build)
@@ -36,23 +37,24 @@ JOBS=${JOBS:-3}
 DKR_URL=https://github.com/Bruceleeto/Diddy-Kong-Racing.git
 DKR_REV=c405d21d0e79a2178ffea1c2732f691692d2eddf
 KOS_URL=https://github.com/KallistiOS/KallistiOS.git
-KOS_REV=680d1862
-KOS_PATCH=$D2N/homebrew/mk64/kos-680d1862-naomi_host.patch
+KOS_REV=9926b70aeafc8398675caef98813f10d15d8a329
+KOS_PATCH=$HERE/kos/kos-9926b70a-naomi_host.patch
 PORTS_URL=https://github.com/KallistiOS/kos-ports.git
-PORTS_REV=f4faacc42faaf552625777b7709e871a827e1055
+PORTS_REV=715dc22154a165c256a50bafa86fda461929696e
 
 say() { echo; echo "== $*"; }
 fail() { echo "build_dkr.sh: $*" >&2; exit 1; }
 
 [ "$(sha1sum "$BASEROM" | cut -c1-40)" = 0cb115d8716dbbc2922fda38e533b9fe63bb9670 ] ||
     fail "$BASEROM no es Diddy Kong Racing (U) 1.0 .z64 (SHA1 0cb115d8...)"
-[ -f "$KOS_PATCH" ] || fail "no está $KOS_PATCH (D2N=$D2N debe ser un clon de dc2naomi)"
+[ -f "$D2N/build.sh" ] || fail "D2N=$D2N no es un clon de dc2naomi"
 [ -f "$KOS_NAOMI_ENV" ] || fail "no está $KOS_NAOMI_ENV (KallistiOS con KOS_SUBARCH=naomi, para el loader)"
 python3 -c 'import sys, venv, ensurepip; sys.exit(sys.version_info < (3, 10))' 2>/dev/null ||
     fail "hace falta python3 >= 3.10 con venv (apt install python3-venv); make setup instala el resto en .venv"
+command -v clang >/dev/null || fail "hace falta clang en el host (apt install clang): lo usa AICAforge"
 mkdir -p "$WORK"
 
-# 1. KallistiOS 680d1862 con el parche NAOMI_HOST, en su propio árbol (nunca el del loader)
+# 1. KallistiOS 9926b70a con el parche NAOMI_HOST, en su propio árbol (nunca el del loader)
 KOS=$WORK/kos-dkr
 if [ ! -f "$KOS/lib/dreamcast/libkallisti.a" ] || ! git -C "$KOS" apply -R --check "$KOS_PATCH" 2>/dev/null; then
     # árbol nuevo, o compilado con una versión anterior del parche: vuelta a $KOS_REV, parche y recompilar
@@ -104,6 +106,34 @@ make build_assets
 mkdir -p "$WORK/bin"
 printf '#!/bin/sh\necho "(mkdcdisc: no hace falta, el disco lo monta dc2naomi)"\n' > "$WORK/bin/mkdcdisc"
 chmod +x "$WORK/bin/mkdcdisc"
+# enDjinn mete su fuente de depuración con "xxd -n NOMBRE -i FICHERO"; el xxd de Ubuntu 22.04 (2021) no tiene -n.
+# Este sustituto hace ese caso y pasa todo lo demás al xxd de verdad.
+cat > "$WORK/bin/xxd" <<'XXD'
+#!/usr/bin/env python3
+import os, shutil, subprocess, sys
+a = sys.argv[1:]
+if "-n" in a and "-i" in a:
+    i = a.index("-n"); name = a[i + 1]; del a[i:i + 2]; a.remove("-i")
+    data = open(a[0], "rb").read() if a else sys.stdin.buffer.read()
+    rows = [", ".join("0x%02x" % b for b in data[j:j + 12]) for j in range(0, len(data), 12)]
+    sys.stdout.write("unsigned char %s[] = {\n  %s\n};\nunsigned int %s_len = %d;\n" % (name, ",\n  ".join(rows), name, len(data)))
+    sys.exit(0)
+here = os.path.dirname(os.path.abspath(__file__))
+path = os.pathsep.join(p for p in os.environ.get("PATH", "").split(os.pathsep) if os.path.abspath(p) != here)
+sys.exit(subprocess.call([shutil.which("xxd", path=path)] + a))
+XXD
+chmod +x "$WORK/bin/xxd"
+# si un xxd sin -n ya falló antes, dejó la cabecera con solo "alignas(32) " y make no la rehace
+QF=third_party/enDjinn/include/enDjinn/embeds/enj_qfont_data.h
+[ ! -f $QF ] || grep -q enj_qfont_data_len $QF || rm -f $QF
+# enDjinn compila su herramienta de fuentes con "gcc -std=gnu23" (a pelo), y el gcc 11 de Ubuntu 22.04 no lo
+# conoce: si es el caso, se deja hecha antes con -std=gnu2x, que le basta
+F=third_party/enDjinn/tools/font_enj
+if [ ! -x $F/bin/font_enj ] && ! echo 'int x;' | gcc -std=gnu23 -x c -c -o /dev/null - 2>/dev/null; then
+    say "font_enj con -std=gnu2x (gcc del host sin gnu23)"
+    (cd $F && gcc -std=gnu2x -Og -g -c ../../code/enj_bitmap.c -o enj_bitmap.o -I ../../include &&
+     mkdir -p bin && gcc -I ../../include enj_bitmap.o -std=gnu2x -Og -g font_enj.c -o bin/font_enj -lm)
+fi
 say "el juego (make -f Makefile.dc cdi $MAKEARGS)"
 # shellcheck disable=SC2086
 PATH=$WORK/bin:$PATH make -f Makefile.dc -j"$JOBS" cdi $MAKEARGS
