@@ -4,7 +4,7 @@ Diddy Kong Racing en la **NAOMI 2** (mueble del Crazy Taxi), a partir del port a
 Es el mismo método que usamos con Mario Kart 64 en [dc2naomi](https://github.com/0skarzer0/dc2naomi) (`homebrew/mk64/`): el juego se
 compila contra una KallistiOS parcheada para NAOMI (`NAOMI_HOST`) y dc2naomi lo empaqueta como imagen de NAOMI.
 
-**Estado:** compila y en Flycast (NAOMI) hace la demo de presentación a 60 fps; sin probar en placa. Ver [docs/plan.md](docs/plan.md).
+**Estado:** en la placa (NAOMI 2) la demo se ve y suena bien; falta probarlo jugando. Ver [docs/plan.md](docs/plan.md).
 
 ## Qué hace falta
 

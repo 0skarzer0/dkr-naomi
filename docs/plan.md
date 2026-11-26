@@ -8,8 +8,10 @@ primer paso.
 
 - **Compila** con `build_dkr.sh` (Ubuntu 22.04 en WSL, sh-elf GCC 15.3). El juego ocupa ~6 MB (`_end` 0x8c5be948).
 - **Flycast (NAOMI):** espiral, logo de Rareware y la demo de presentación (carreras con Timber, Conker, Drumstick,
-  Banjo) a ~60 fps. El residente le da mando (A0) y VMU (A1). Sin probar: mandos, partida, sonido. **Sin probar en
-  placa.**
+  Banjo) a ~60 fps. El residente le da mando (A0) y VMU (A1).
+- **Placa (NAOMI 2, mueble del Crazy Taxi), 2026-11-26:** arranca y hace la demo; `live.py` da 60 vblanks/s, sin
+  excepciones, assets leídos sin errores. El usuario: **"se ve y suena bien"**. AICAflow funciona en la NAOMI pese a
+  su `spu_dma_transfer` directo. Sin probar: jugarlo (mandos), la VMU y el ritmo de imagen medido.
 - **KallistiOS:** el port pide KOS master (cambian `genwait_wait`, los callbacks de maple, `purupuru`,
   `g2_lock_scoped`, `pvr_dr_addr`, las cabeceras de caché y temporizador), no 680d1862. El parche `NAOMI_HOST` de
   dc2naomi está llevado a **KOS 9926b70a** (`kos/kos-9926b70a-naomi_host.patch`): 7 conflictos resueltos a mano,
@@ -26,7 +28,7 @@ primer paso.
 |---|---|---|---|
 | KallistiOS | API de KOS master de 2026 | resuelto | KOS 9926b70a + `kos/kos-9926b70a-naomi_host.patch` |
 | Compilador | `-std=gnu23`, LTO con una sola partición, `-mfsrra -mfsca` | bajo | GCC 14-15 (tenemos 15.3) |
-| Sonido | **AICAflow**: firmware ARM7 propio, interrupción AICA→SH4 (`ASIC_EVT_SPU_IRQ`, MCIEB/MCIRE), subida por DMA G2 (`spu_dma_transfer`, llamado directamente desde `driver/sh4/src/dma.c`: en NAOMI esa DMA no acaba nunca, y el parche de KOS solo la evita dentro de `spu_memload_dma`), escrituras directas al DSP (`0xa0702000`, `0xa0703000`…), 2 MB de RAM de sonido como mucho | **alto** | Es lo primero que puede colgar. Comprobar que el residente no pisa la RAM ni los canales del AICA que usa AICAflow (el residente toca dos canales para CD-DA: sin el flag CDDA no debería). Ver si la interrupción del AICA llega igual en NAOMI |
+| Sonido | **AICAflow**: firmware ARM7 propio, interrupción AICA→SH4 (`ASIC_EVT_SPU_IRQ`, MCIEB/MCIRE), subida por DMA G2 (`spu_dma_transfer`, llamado directamente desde `driver/sh4/src/dma.c`: en NAOMI esa DMA no acaba nunca, y el parche de KOS solo la evita dentro de `spu_memload_dma`), escrituras directas al DSP (`0xa0702000`, `0xa0703000`…), 2 MB de RAM de sonido como mucho | visto bien en placa (2026-11-26) | Es lo primero que puede colgar. Comprobar que el residente no pisa la RAM ni los canales del AICA que usa AICAflow (el residente toca dos canales para CD-DA: sin el flag CDDA no debería). Ver si la interrupción del AICA llega igual en NAOMI |
 | Vídeo | 640×480, `PM_RGB888P`, FSAA horizontal (1280 de ancho), 60 fps; la FSAA se quita en los mapas más pesados; el PVR se reinicia para cambiarla | medio | El ritmo lo marca un manejador de vblank (`enj_pacing.c`). En MK64 la imagen salía 1 o 2 vblanks después según el cuadro: aquí, a 60 fps, medir y si hace falta `pvr_naomi_hold_flip(1)`. La NAOMI tiene 16 MB de VRAM: quizá FSAA en todos los mapas y más búfer de vértices |
 | Mandos | Mando de Dreamcast por maple (enDjinn `enj_ctrl.c`); vibración (`purupuru`) | bajo | El residente traduce JVS a mando DC, como en MK64. Perfil de mandos propio (empezar por `mk64`: A gas, B freno, R salto, Z objeto) |
 | VMU / partidas | Guarda con `enj_vmu` y anima la pantalla de la VMU | bajo | VMU emulada de dc2naomi (flag `0x8000`); la pantalla de la VMU no existe, debe ignorarse sin colgar |
